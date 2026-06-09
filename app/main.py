@@ -26,6 +26,7 @@ from database import (
     get_spread_type_stats,
     get_recent_payments,
     get_payments_stats,
+    get_sales_funnel,
     get_all_user_ids,
     can_use_free_spread,
     mark_free_spread_used,
@@ -97,6 +98,7 @@ admin_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="📊 Популярность")],
         [KeyboardButton(text="📣 Рассылка")],
         [KeyboardButton(text="🎁 Акции")],
+        [KeyboardButton(text="📈 Воронка")],
         [KeyboardButton(text="⬅️ Назад")]
     ],
     resize_keyboard=True
@@ -658,6 +660,26 @@ async def promo_discount(message: Message):
         "Отправить?",
         reply_markup=broadcast_confirm_keyboard,
         parse_mode="HTML"
+    )
+
+
+
+@dp.message(F.text == "📈 Воронка")
+async def admin_sales_funnel(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("Нет доступа.")
+        return
+
+    funnel = get_sales_funnel()
+
+    await message.answer(
+        "📈 Воронка продаж\n\n"
+        f"👥 Пользователей всего: {funnel['users_count']}\n"
+        f"🔮 Получили карту дня: {funnel['daily_card_users']}\n"
+        f"📜 Сделали расклад: {funnel['spread_users']}\n"
+        f"💰 Совершили покупку: {funnel['paying_users']}\n\n"
+        f"📜 Конверсия в расклад: {funnel['conversion_to_spread']}%\n"
+        f"💰 Конверсия в покупку: {funnel['conversion_to_payment']}%"
     )
 
 
