@@ -251,10 +251,11 @@ async def day_card(message: Message):
 
     if existing_card:
         await message.answer(
-            f"🎴 Твоя карта дня уже была вытянута сегодня.\n\n"
-            f"{existing_card['name']} ({existing_card['orientation']})\n\n"
+            f"🔮 <b>Ваша карта дня уже открыта</b>\n\n"
+            f"🎴 <b>{existing_card['name']}</b>\n"
+            f"Положение: {existing_card['orientation']}\n\n"
             f"{markdown_bold_to_html(existing_card['interpretation'])}\n\n"
-            f"Возвращайся завтра за новой картой.",
+            f"✨ Новая карта будет доступна завтра.",
             parse_mode="HTML"
         )
         return
@@ -271,7 +272,14 @@ async def day_card(message: Message):
 
     await message.answer_photo(
         photo=photo,
-        caption=f"🎴 {card['name']} ({card['orientation']})\n\n{interpretation}"
+        caption=(
+            f"🔮 <b>Карта дня</b>\n\n"
+            f"🎴 <b>{card['name']}</b>\n"
+            f"Положение: {card['orientation']}\n\n"
+            f"{markdown_bold_to_html(interpretation)}\n\n"
+            f"✨ Пусть эта подсказка поможет пройти день внимательнее."
+        ),
+        parse_mode="HTML"
     )
 
 
