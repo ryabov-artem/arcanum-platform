@@ -113,6 +113,8 @@ shop_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🪙 Купить 1 расклад — 99 ₽")],
         [KeyboardButton(text="💎 Купить 5 раскладов — 299 ₽")],
+        [KeyboardButton(text="🔮 Купить 10 раскладов — 499 ₽")],
+        [KeyboardButton(text="👑 Купить 20 раскладов — 799 ₽")],
         [KeyboardButton(text="⬅️ Назад")]
     ],
     resize_keyboard=True
@@ -355,6 +357,63 @@ async def buy_five_spreads(message: Message):
         reply_markup=keyboard
     )
 
+
+
+
+@dp.message(F.text.contains("Купить 10 раскладов"))
+async def buy_ten_spreads(message: Message):
+    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+        await message.answer("Оплата временно недоступна. Не найдены данные ЮKassa.")
+        return
+
+    try:
+        payment = create_yookassa_payment(message.from_user.id, 10, 499)
+        url = payment.confirmation.confirmation_url
+    except Exception as e:
+        await message.answer(f"Не удалось создать платёж. Ошибка: {e}")
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Перейти к оплате", url=url)]
+        ]
+    )
+
+    await message.answer(
+        "🔮 10 раскладов\n\n"
+        "Стоимость: 499 ₽\n\n"
+        "Выгодный пакет для нескольких вопросов: отношения, работа, деньги и личные ситуации.\n\n"
+        "Нажмите кнопку ниже и выберите удобный способ оплаты.",
+        reply_markup=keyboard
+    )
+
+
+@dp.message(F.text.contains("Купить 20 раскладов"))
+async def buy_twenty_spreads(message: Message):
+    if not YOOKASSA_SHOP_ID or not YOOKASSA_SECRET_KEY:
+        await message.answer("Оплата временно недоступна. Не найдены данные ЮKassa.")
+        return
+
+    try:
+        payment = create_yookassa_payment(message.from_user.id, 20, 799)
+        url = payment.confirmation.confirmation_url
+    except Exception as e:
+        await message.answer(f"Не удалось создать платёж. Ошибка: {e}")
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Перейти к оплате", url=url)]
+        ]
+    )
+
+    await message.answer(
+        "👑 20 раскладов\n\n"
+        "Стоимость: 799 ₽\n\n"
+        "Самый выгодный пакет для тех, кто часто обращается к Аркануму.\n\n"
+        "Нажмите кнопку ниже и выберите удобный способ оплаты.",
+        reply_markup=keyboard
+    )
 
 
 @dp.message(F.text == "🌟 Общий расклад")
