@@ -536,3 +536,33 @@ def get_top_users(limit=10):
             for row in top_spreads
         ],
     }
+
+def get_sales_funnel():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) FROM users")
+    users_count = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(DISTINCT user_id) FROM daily_cards")
+    daily_card_users = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(DISTINCT user_id) FROM spreads")
+    spread_users = cursor.fetchone()[0]
+
+    cursor.execute("SELECT COUNT(DISTINCT user_id) FROM payments")
+    paying_users = cursor.fetchone()[0]
+
+    conversion_to_spread = round((spread_users / users_count * 100), 1) if users_count else 0
+    conversion_to_payment = round((paying_users / users_count * 100), 1) if users_count else 0
+
+    conn.close()
+
+    return {
+        "users_count": users_count,
+        "daily_card_users": daily_card_users,
+        "spread_users": spread_users,
+        "paying_users": paying_users,
+        "conversion_to_spread": conversion_to_spread,
+        "conversion_to_payment": conversion_to_payment,
+    }
