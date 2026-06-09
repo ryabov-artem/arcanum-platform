@@ -13,7 +13,7 @@ from ai import (
 
 from database import (
     init_db,
-    save_user,
+from core.users.api import register_user
     get_today_card,
     save_daily_card,
     save_spread,
@@ -32,8 +32,8 @@ from database import (
     can_use_free_spread,
     mark_free_spread_used,
     core.balance.api.user_balance,
-    spend_balance,
-    add_balance
+    charge,
+    add_funds
 )
 
 from tarot import draw_card, draw_three_cards
@@ -157,7 +157,7 @@ def charge_user_for_spread(user_id):
     if can_use_free_spread(user_id):
         mark_free_spread_used(user_id)
     elif core.balance.api.user_balance(user_id) > 0:
-        spend_balance(user_id)
+        charge(user_id)
 
 
 async def no_access_message(message: Message):
@@ -176,7 +176,7 @@ async def no_access_message(message: Message):
 
 @dp.message(CommandStart())
 async def start(message: Message):
-    save_user(message.from_user)
+    register_user(message.from_user)
 
     await message.answer(
         "🔮 Арканум\n\n"
@@ -224,7 +224,7 @@ async def admin_give_balance(message: Message):
         await message.answer("COUNT должен быть больше 0.")
         return
 
-    add_balance(target_user_id, amount)
+    add_funds(target_user_id, amount)
 
     await message.answer(
         f"✅ Начислено {amount} расклад(ов).\n"
@@ -245,7 +245,7 @@ async def admin_give_balance(message: Message):
 
 @dp.message(F.text == "🎁 Карта дня")
 async def day_card(message: Message):
-    save_user(message.from_user)
+    register_user(message.from_user)
 
     existing_card = get_today_card(message.from_user.id)
 
@@ -285,7 +285,7 @@ async def day_card(message: Message):
 
 @dp.message(F.text == "💎 Баланс")
 async def balance(message: Message):
-    save_user(message.from_user)
+    register_user(message.from_user)
 
     balance_count = core.balance.api.user_balance(message.from_user.id)
 
