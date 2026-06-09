@@ -507,13 +507,14 @@ async def history(message: Message):
         )
         return
 
-    text = "📜 Последние расклады:\n\n"
+    text = f"📜 История раскладов\n\nВсего показано: {len(spreads)} последних раскладов\n\n"
 
     for spread in spreads:
         text += (
-            f"🔮 #{spread['id']} — {spread['spread_type']}\n"
-            f"Вопрос: {spread['question']}\n"
-            f"Карты: {spread['cards']}\n\n"
+            "━━━━━━━━━━━━━━\n"
+            f"🔮 {spread['spread_type']}\n\n"
+            f"❓ {spread['question']}\n\n"
+            f"🎴 {spread['cards']}\n\n"
         )
 
     await message.answer(text)
