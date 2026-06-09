@@ -34,7 +34,7 @@ def interpret_day_card(card):
 """
 
     response = client.responses.create(
-        model="gpt-5.5",
+        model="gpt-5.4-mini",
         input=prompt
     )
 
@@ -82,7 +82,7 @@ def interpret_three_cards(question, cards):
 """
 
     response = client.responses.create(
-        model="gpt-5.5",
+        model="gpt-5.4-mini",
         input=prompt
     )
 
@@ -133,7 +133,7 @@ def interpret_relationship_spread(question, cards):
 """
 
     response = client.responses.create(
-        model="gpt-5.5",
+        model="gpt-5.4-mini",
         input=prompt
     )
 
@@ -184,7 +184,7 @@ def interpret_career_spread(question, cards):
 """
 
     response = client.responses.create(
-        model="gpt-5.5",
+        model="gpt-5.4-mini",
         input=prompt
     )
 
@@ -236,7 +236,7 @@ def interpret_money_spread(question, cards):
 """
 
     response = client.responses.create(
-        model="gpt-5.5",
+        model="gpt-5.4-mini",
         input=prompt
     )
 
