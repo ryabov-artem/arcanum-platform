@@ -892,9 +892,16 @@ async def process_spread(message: Message, spread_type, intro_text, interpret_fu
 
     charge_user_for_spread(user_id)
 
+    cards_text = "\n".join([
+        f"🎴 {i+1}. {card['name']} — {card['orientation']}"
+        for i, card in enumerate(cards)
+    ])
+
     await message.answer(
-        f"🔮 {spread_type}\n\n"
-        f"Вопрос:\n{question}\n\n"
+        f"🔮 <b>{spread_type}</b>\n\n"
+        f"❓ <b>Ваш вопрос:</b>\n{question}\n\n"
+        f"🎴 <b>Выпавшие карты:</b>\n{cards_text}\n\n"
+        f"✨ <b>Интерпретация</b>\n\n"
         f"{markdown_bold_to_html(interpretation)}",
         parse_mode="HTML"
     )
