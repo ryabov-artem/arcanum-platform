@@ -27,6 +27,7 @@ from database import (
     get_recent_payments,
     get_payments_stats,
     get_sales_funnel,
+    get_top_users,
     get_all_user_ids,
     can_use_free_spread,
     mark_free_spread_used,
@@ -99,6 +100,7 @@ admin_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="📣 Рассылка")],
         [KeyboardButton(text="🎁 Акции")],
         [KeyboardButton(text="📈 Воронка")],
+        [KeyboardButton(text="🏆 Топ")],
         [KeyboardButton(text="⬅️ Назад")]
     ],
     resize_keyboard=True
@@ -681,6 +683,39 @@ async def admin_sales_funnel(message: Message):
         f"📜 Конверсия в расклад: {funnel['conversion_to_spread']}%\n"
         f"💰 Конверсия в покупку: {funnel['conversion_to_payment']}%"
     )
+
+
+
+@dp.message(F.text == "🏆 Топ")
+async def admin_top_users(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("Нет доступа.")
+        return
+
+    data = get_top_users(10)
+
+    text = "🏆 Топ пользователей\n\n"
+
+    text += "💰 По покупкам:\n"
+    if data["top_payers"]:
+        for i, user in enumerate(data["top_payers"], start=1):
+            name = user["username"] or user["first_name"] or str(user["user_id"])
+            text += (
+                f"{i}. {name} — {user['total_amount']} ₽ "
+                f"({user['payments_count']} платеж., {user['total_spreads']} раскл.)\n"
+            )
+    else:
+        text += "Пока нет покупок.\n"
+
+    text += "\n📜 По раскладам:\n"
+    if data["top_spreads"]:
+        for i, user in enumerate(data["top_spreads"], start=1):
+            name = user["username"] or user["first_name"] or str(user["user_id"])
+            text += f"{i}. {name} — {user['spreads_count']} раскл.\n"
+    else:
+        text += "Пока нет раскладов.\n"
+
+    await message.answer(text)
 
 
 @dp.message(F.text == "📣 Рассылка")
