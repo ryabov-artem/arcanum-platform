@@ -96,6 +96,7 @@ admin_keyboard = ReplyKeyboardMarkup(
         [KeyboardButton(text="📜 Последние расклады")],
         [KeyboardButton(text="📊 Популярность")],
         [KeyboardButton(text="📣 Рассылка")],
+        [KeyboardButton(text="🎁 Акции")],
         [KeyboardButton(text="⬅️ Назад")]
     ],
     resize_keyboard=True
@@ -117,6 +118,17 @@ shop_keyboard = ReplyKeyboardMarkup(
 broadcast_confirm_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="✅ Отправить"), KeyboardButton(text="❌ Отмена")]
+    ],
+    resize_keyboard=True
+)
+
+
+promo_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="🎁 Акция: 5 раскладов")],
+        [KeyboardButton(text="🔮 Напомнить про карту дня")],
+        [KeyboardButton(text="💰 Скидка на расклады")],
+        [KeyboardButton(text="⬅️ Назад")]
     ],
     resize_keyboard=True
 )
@@ -572,6 +584,81 @@ async def admin_popularity(message: Message):
         text += f"{item['spread_type']}: {item['count']}\n"
 
     await message.answer(text)
+
+
+
+@dp.message(F.text == "🎁 Акции")
+async def admin_promos(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("Нет доступа.")
+        return
+
+    await message.answer(
+        "🎁 Выбери готовую акцию для рассылки:",
+        reply_markup=promo_keyboard
+    )
+
+
+@dp.message(F.text == "🎁 Акция: 5 раскладов")
+async def promo_five_spreads(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    pending_broadcast[message.from_user.id] = (
+        "🎁 <b>Специальное предложение в Аркануме</b>\n\n"
+        "Получите сразу <b>5 раскладов</b> по выгодной цене — 299 ₽.\n\n"
+        "🔮 Можно использовать для вопросов про отношения, карьеру, деньги и личные ситуации.\n\n"
+        "Нажмите 💎 Баланс, чтобы пополнить запас раскладов."
+    )
+
+    await message.answer(
+        "📣 Предпросмотр акции:\n\n"
+        f"{pending_broadcast[message.from_user.id]}\n\n"
+        "Отправить?",
+        reply_markup=broadcast_confirm_keyboard,
+        parse_mode="HTML"
+    )
+
+
+@dp.message(F.text == "🔮 Напомнить про карту дня")
+async def promo_daily_card(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    pending_broadcast[message.from_user.id] = (
+        "🔮 <b>Карта дня уже ждёт вас</b>\n\n"
+        "Загляните в Арканум и получите короткую подсказку на сегодня.\n\n"
+        "Иногда одна карта помогает увидеть день чуть яснее ✨"
+    )
+
+    await message.answer(
+        "📣 Предпросмотр акции:\n\n"
+        f"{pending_broadcast[message.from_user.id]}\n\n"
+        "Отправить?",
+        reply_markup=broadcast_confirm_keyboard,
+        parse_mode="HTML"
+    )
+
+
+@dp.message(F.text == "💰 Скидка на расклады")
+async def promo_discount(message: Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    pending_broadcast[message.from_user.id] = (
+        "💰 <b>Выгодный момент для расклада</b>\n\n"
+        "Пакет из <b>5 раскладов</b> сейчас выгоднее, чем покупать по одному.\n\n"
+        "🔮 Задайте вопросы, которые давно откладывали: отношения, работа, деньги или личный выбор.\n\n"
+        "Нажмите 💎 Баланс и выберите подходящий вариант."
+    )
+
+    await message.answer(
+        "📣 Предпросмотр акции:\n\n"
+        f"{pending_broadcast[message.from_user.id]}\n\n"
+        "Отправить?",
+        reply_markup=broadcast_confirm_keyboard,
+        parse_mode="HTML"
+    )
 
 
 @dp.message(F.text == "📣 Рассылка")
