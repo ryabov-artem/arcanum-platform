@@ -11,12 +11,12 @@ from ai import (
     interpret_money_spread
 )
 
-from database import (
+from core.database.api import (
     init_db,
 from core.users.api import register_user
     get_today_card,
     save_daily_card,
-    save_spread,
+    save,
     get_user_spreads,
     get_users_count,
     get_daily_cards_count,
@@ -31,7 +31,7 @@ from core.users.api import register_user
     get_all_user_ids,
     can_use_free_spread,
     mark_free_spread_used,
-    core.balance.api.user_balance,
+    core.access.api.has_paid_access,
     charge,
     add_funds
 )
@@ -84,7 +84,7 @@ def get_main_keyboard(user_id):
         [KeyboardButton(text="📜 История"), KeyboardButton(text="ℹ️ О боте")]
     ]
 
-    if user_id == ADMIN_ID:
+    if from core.access.admin import is_admin:
         keyboard.append([KeyboardButton(text="⚙️ Админка")])
 
     return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
@@ -140,14 +140,10 @@ promo_keyboard = ReplyKeyboardMarkup(
 )
 
 
-def user_has_spread_access(user_id):
-    if user_id == ADMIN_ID:
-        return True
-
     if can_use_free_spread(user_id):
         return True
 
-    if core.balance.api.user_balance(user_id) > 0:
+    if core.access.api.has_paid_access(user_id) > 0:
         return True
 
     return False
@@ -156,7 +152,7 @@ def user_has_spread_access(user_id):
 def charge_user_for_spread(user_id):
     if can_use_free_spread(user_id):
         mark_free_spread_used(user_id)
-    elif core.balance.api.user_balance(user_id) > 0:
+    elif core.access.api.has_paid_access(user_id) > 0:
         charge(user_id)
 
 
@@ -189,7 +185,7 @@ async def start(message: Message):
         "• Отношения\n"
         "• Карьера\n"
         "• Деньги\n\n"
-        f"💎 Ваш баланс: {core.balance.api.user_balance(message.from_user.id)} расклад(ов)\n\n"
+        f"💎 Ваш баланс: {core.access.api.has_paid_access(message.from_user.id)} расклад(ов)\n\n"
         "Выберите действие ниже 👇",
         reply_markup=get_main_keyboard(message.from_user.id)
     )
@@ -287,7 +283,7 @@ async def day_card(message: Message):
 async def balance(message: Message):
     register_user(message.from_user)
 
-    balance_count = core.balance.api.user_balance(message.from_user.id)
+    balance_count = core.access.api.has_paid_access(message.from_user.id)
 
     await message.answer(
         f"💎 Ваш баланс\n\n"
@@ -304,11 +300,6 @@ async def balance(message: Message):
 
 
 
-
-def create_yookassa_payment(user_id: int, count: int, amount_rub: int):
-    description = f"Arcanum spreads: {count}"
-    return create_payment(amount_rub, description)
-    return payment
 
 
 @dp.message(F.text.contains("Купить 1 расклад"))

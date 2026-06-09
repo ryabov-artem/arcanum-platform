@@ -1,5 +1,4 @@
-from core.payments.yookassa import create_payment
+from app.main import create_yookassa_payment
 
 def buy_spread(user_id: int, count: int, amount: int):
-    description = f"Arcanum spreads: {count}"
-    return create_payment(amount, description)
+    return create_yookassa_payment(user_id, count, amount)
