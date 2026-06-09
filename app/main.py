@@ -43,7 +43,7 @@ from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import CommandStart
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
-from yookassa import Configuration, Payment
+from core.payments.yookassa import create_payment
 
 load_dotenv("/opt/bots/tarot_bot/.env")
 
@@ -306,23 +306,8 @@ async def balance(message: Message):
 
 
 def create_yookassa_payment(user_id: int, count: int, amount_rub: int):
-    payment = Payment.create({
-        "amount": {
-            "value": f"{amount_rub}.00",
-            "currency": "RUB"
-        },
-        "capture": True,
-        "confirmation": {
-            "type": "redirect",
-            "return_url": YOOKASSA_RETURN_URL
-        },
-        "description": f"Арканум: {count} расклад(ов)",
-        "metadata": {
-            "user_id": str(user_id),
-            "count": str(count)
-        }
-    }, str(uuid.uuid4()))
-
+    description = f"Arcanum spreads: {count}"
+    return create_payment(amount_rub, description)
     return payment
 
 
