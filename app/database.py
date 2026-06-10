@@ -441,3 +441,39 @@ def spend_balance(user_id):
 
     conn.commit()
     conn.close()
+
+
+def save_payment(payment_id, user_id, amount, spreads_added):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS payments (
+        payment_id TEXT PRIMARY KEY,
+        user_id INTEGER,
+        amount REAL,
+        spreads_added INTEGER,
+        created_at TEXT
+    )
+    """)
+
+    cursor.execute("""
+    INSERT OR IGNORE INTO payments
+    (
+        payment_id,
+        user_id,
+        amount,
+        spreads_added,
+        created_at
+    )
+    VALUES (?, ?, ?, ?, ?)
+    """, (
+        payment_id,
+        user_id,
+        amount,
+        spreads_added,
+        datetime.now().isoformat()
+    ))
+
+    conn.commit()
+    conn.close()
