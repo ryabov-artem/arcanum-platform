@@ -24,6 +24,7 @@ from database import (
     get_recent_spreads,
     get_recent_users,
     get_spread_type_stats,
+    get_top_users,
     get_all_user_ids,
     can_use_free_spread,
     mark_free_spread_used,

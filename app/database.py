@@ -477,3 +477,62 @@ def save_payment(payment_id, user_id, amount, spreads_added):
 
     conn.commit()
     conn.close()
+
+def get_top_users(limit=10):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    SELECT
+        payments.user_id,
+        users.username,
+        users.first_name,
+        COUNT(payments.payment_id) as payments_count,
+        COALESCE(SUM(payments.amount), 0) as total_amount,
+        COALESCE(SUM(payments.spreads_added), 0) as total_spreads
+    FROM payments
+    LEFT JOIN users ON users.user_id = payments.user_id
+    GROUP BY payments.user_id
+    ORDER BY total_amount DESC
+    LIMIT ?
+    """, (limit,))
+    top_payers = cursor.fetchall()
+
+    cursor.execute("""
+    SELECT
+        spreads.user_id,
+        users.username,
+        users.first_name,
+        COUNT(spreads.id) as spreads_count
+    FROM spreads
+    LEFT JOIN users ON users.user_id = spreads.user_id
+    GROUP BY spreads.user_id
+    ORDER BY spreads_count DESC
+    LIMIT ?
+    """, (limit,))
+    top_spreads = cursor.fetchall()
+
+    conn.close()
+
+    return {
+        "top_payers": [
+            {
+                "user_id": row[0],
+                "username": row[1],
+                "first_name": row[2],
+                "payments_count": row[3],
+                "total_amount": row[4],
+                "total_spreads": row[5],
+            }
+            for row in top_payers
+        ],
+        "top_spreads": [
+            {
+                "user_id": row[0],
+                "username": row[1],
+                "first_name": row[2],
+                "spreads_count": row[3],
+            }
+            for row in top_spreads
+        ],
+    }
