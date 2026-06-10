@@ -566,3 +566,81 @@ def get_sales_funnel():
         "conversion_to_spread": conversion_to_spread,
         "conversion_to_payment": conversion_to_payment,
     }
+
+def get_recent_payments(limit=10):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS payments (
+        payment_id TEXT PRIMARY KEY,
+        user_id INTEGER,
+        amount REAL,
+        spreads_added INTEGER,
+        created_at TEXT
+    )
+    """)
+
+    cursor.execute("""
+    SELECT
+        payments.payment_id,
+        payments.user_id,
+        users.username,
+        users.first_name,
+        payments.amount,
+        payments.spreads_added,
+        payments.created_at
+    FROM payments
+    LEFT JOIN users ON users.user_id = payments.user_id
+    ORDER BY payments.created_at DESC
+    LIMIT ?
+    """, (limit,))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [
+        {
+            "id": row[0],
+            "payment_id": row[0],
+            "user_id": row[1],
+            "username": row[2],
+            "first_name": row[3],
+            "amount": row[4],
+            "spreads_added": row[5],
+            "created_at": row[6],
+        }
+        for row in rows
+    ]
+
+
+def get_payments_stats():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS payments (
+        payment_id TEXT PRIMARY KEY,
+        user_id INTEGER,
+        amount REAL,
+        spreads_added INTEGER,
+        created_at TEXT
+    )
+    """)
+
+    cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount), 0), COALESCE(SUM(spreads_added), 0) FROM payments")
+    total_count, total_amount, total_spreads = cursor.fetchone()
+
+    cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount), 0), COALESCE(SUM(spreads_added), 0) FROM payments WHERE date(created_at) = date('now', 'localtime')")
+    today_count, today_amount, today_spreads = cursor.fetchone()
+
+    conn.close()
+
+    return {
+        "total_count": total_count,
+        "total_amount": total_amount,
+        "total_spreads": total_spreads,
+        "today_count": today_count,
+        "today_amount": today_amount,
+        "today_spreads": today_spreads,
+    }
