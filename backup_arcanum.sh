@@ -3,7 +3,7 @@ set -e
 
 SRC="/opt/bots/tarot_bot"
 DST="/opt/backups/arcanum"
-REMOTE="gdrive:ArcanumBackups"
+REMOTE="gdrive:TG_Bots/Arcanum"
 DATE=$(date +%F_%H-%M-%S)
 
 mkdir -p "$DST"
