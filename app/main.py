@@ -792,6 +792,7 @@ async def confirm_broadcast(message: Message):
     for target_user_id in user_ids:
         try:
             await bot.send_message(chat_id=target_user_id, text=text_to_send, parse_mode="HTML")
+            await asyncio.sleep(0.05)
             success += 1
         except Exception:
             failed += 1
@@ -835,6 +836,7 @@ async def process_spread(message: Message, spread_type, intro_text, interpret_fu
         )
 
     await message.answer("✨ Интерпретирую расклад...")
+    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
     interpretation = interpret_func(question, cards)
 
