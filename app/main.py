@@ -66,8 +66,7 @@ session = AiohttpSession(proxy=PROXY_URL)
 bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 
-awaiting_broadcast_text = set()
-pending_broadcast = {}
+ 
 
 
 class SpreadStates(StatesGroup):
@@ -80,6 +79,10 @@ class SpreadStates(StatesGroup):
 class AdminStates(StatesGroup):
     waiting_balance_grant = State()
     waiting_balance_writeoff = State()
+
+
+class BroadcastStates(StatesGroup):
+    waiting_broadcast_text = State()
 
 
 def markdown_bold_to_html(text):
@@ -650,20 +653,22 @@ async def admin_promos(message: Message):
 
 
 @dp.message(F.text == "🎁 Акция: 5 раскладов")
-async def promo_five_spreads(message: Message):
+async def promo_five_spreads(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
 
-    pending_broadcast[message.from_user.id] = (
+    broadcast_text = (
         "🎁 <b>Специальное предложение в Аркануме</b>\n\n"
         "Получите сразу <b>5 раскладов</b> по выгодной цене — 299 ₽.\n\n"
         "🔮 Можно использовать для вопросов про отношения, карьеру, деньги и личные ситуации.\n\n"
         "Нажмите 💎 Баланс, чтобы пополнить запас раскладов."
     )
 
+    await state.update_data(broadcast_text=broadcast_text)
+
     await message.answer(
         "📣 Предпросмотр акции:\n\n"
-        f"{pending_broadcast[message.from_user.id]}\n\n"
+        f"{broadcast_text}\n\n"
         "Отправить?",
         reply_markup=broadcast_confirm_keyboard,
         parse_mode="HTML"
@@ -671,19 +676,21 @@ async def promo_five_spreads(message: Message):
 
 
 @dp.message(F.text == "🔮 Напомнить про карту дня")
-async def promo_daily_card(message: Message):
+async def promo_daily_card(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
 
-    pending_broadcast[message.from_user.id] = (
+    broadcast_text = (
         "🔮 <b>Карта дня уже ждёт вас</b>\n\n"
         "Загляните в Арканум и получите короткую подсказку на сегодня.\n\n"
         "Иногда одна карта помогает увидеть день чуть яснее ✨"
     )
 
+    await state.update_data(broadcast_text=broadcast_text)
+
     await message.answer(
         "📣 Предпросмотр акции:\n\n"
-        f"{pending_broadcast[message.from_user.id]}\n\n"
+        f"{broadcast_text}\n\n"
         "Отправить?",
         reply_markup=broadcast_confirm_keyboard,
         parse_mode="HTML"
@@ -691,20 +698,22 @@ async def promo_daily_card(message: Message):
 
 
 @dp.message(F.text == "💰 Скидка на расклады")
-async def promo_discount(message: Message):
+async def promo_discount(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
 
-    pending_broadcast[message.from_user.id] = (
+    broadcast_text = (
         "💰 <b>Выгодный момент для расклада</b>\n\n"
         "Пакет из <b>5 раскладов</b> сейчас выгоднее, чем покупать по одному.\n\n"
         "🔮 Задайте вопросы, которые давно откладывали: отношения, работа, деньги или личный выбор.\n\n"
         "Нажмите 💎 Баланс и выберите подходящий вариант."
     )
 
+    await state.update_data(broadcast_text=broadcast_text)
+
     await message.answer(
         "📣 Предпросмотр акции:\n\n"
-        f"{pending_broadcast[message.from_user.id]}\n\n"
+        f"{broadcast_text}\n\n"
         "Отправить?",
         reply_markup=broadcast_confirm_keyboard,
         parse_mode="HTML"
@@ -765,12 +774,12 @@ async def admin_top_users(message: Message):
 
 
 @dp.message(F.text == "📣 Рассылка")
-async def admin_broadcast_start(message: Message):
+async def admin_broadcast_start(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         await message.answer("Нет доступа.")
         return
 
-    awaiting_broadcast_text.add(message.from_user.id)
+    await state.set_state(BroadcastStates.waiting_broadcast_text)
 
     await message.answer(
         "📣 Введи текст рассылки.\n\n"
@@ -779,17 +788,18 @@ async def admin_broadcast_start(message: Message):
 
 
 @dp.message(F.text == "✅ Отправить")
-async def confirm_broadcast(message: Message):
+async def confirm_broadcast(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
 
-    user_id = message.from_user.id
+    data = await state.get_data()
+    text_to_send = data.get("broadcast_text")
 
-    if user_id not in pending_broadcast:
+    if not text_to_send:
         await message.answer("Нет активной рассылки.")
         return
 
-    text_to_send = pending_broadcast.pop(user_id)
+    await state.clear()
     user_ids = await get_all_user_ids()
 
     success = 0
@@ -814,11 +824,11 @@ async def confirm_broadcast(message: Message):
 
 
 @dp.message(F.text == "❌ Отмена")
-async def cancel_broadcast(message: Message):
+async def cancel_broadcast(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         return
 
-    pending_broadcast.pop(message.from_user.id, None)
+    await state.clear()
 
     await message.answer("❌ Рассылка отменена.", reply_markup=admin_keyboard)
 
@@ -995,21 +1005,26 @@ async def process_three_card_question(message: Message, state: FSMContext):
     )
 
 
+
+@dp.message(BroadcastStates.waiting_broadcast_text)
+async def process_broadcast_text(message: Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID:
+        await state.clear()
+        return
+
+    await state.update_data(broadcast_text=message.text)
+
+    await message.answer(
+        "📣 Предпросмотр рассылки:\n\n"
+        f"{message.text}\n\n"
+        "Отправить?",
+        reply_markup=broadcast_confirm_keyboard
+    )
+
+
 @dp.message()
 async def fallback(message: Message):
     user_id = message.from_user.id
-
-    if user_id in awaiting_broadcast_text:
-        awaiting_broadcast_text.remove(user_id)
-        pending_broadcast[user_id] = message.text
-
-        await message.answer(
-            "📣 Предпросмотр рассылки:\n\n"
-            f"{message.text}\n\n"
-            "Отправить?",
-            reply_markup=broadcast_confirm_keyboard
-        )
-        return
 
     await message.answer("Нажми /start чтобы открыть меню.")
 
