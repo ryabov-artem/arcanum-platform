@@ -67,8 +67,6 @@ bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 
 awaiting_broadcast_text = set()
-awaiting_balance_grant = set()
-awaiting_balance_writeoff = set()
 pending_broadcast = {}
 
 
@@ -77,6 +75,11 @@ class SpreadStates(StatesGroup):
     waiting_relationship_question = State()
     waiting_career_question = State()
     waiting_money_question = State()
+
+
+class AdminStates(StatesGroup):
+    waiting_balance_grant = State()
+    waiting_balance_writeoff = State()
 
 
 def markdown_bold_to_html(text):
@@ -865,26 +868,26 @@ async def process_spread(message: Message, spread_type, intro_text, interpret_fu
 
 
 @dp.message(F.text == "➕ Начислить баланс")
-async def admin_balance_grant_start(message: Message):
+async def admin_balance_grant_start(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         await message.answer("Нет доступа.")
         return
-    awaiting_balance_grant.add(message.from_user.id)
+    await state.set_state(AdminStates.waiting_balance_grant)
     await message.answer("Введите USER_ID и количество раскладов:\n\nПример:\n185955220 5")
 
 
 @dp.message(F.text == "➖ Списать баланс")
-async def admin_balance_writeoff_start(message: Message):
+async def admin_balance_writeoff_start(message: Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID:
         await message.answer("Нет доступа.")
         return
-    awaiting_balance_writeoff.add(message.from_user.id)
+    await state.set_state(AdminStates.waiting_balance_writeoff)
     await message.answer("Введите USER_ID и количество раскладов для списания:\n\nПример:\n185955220 5")
 
 
-@dp.message(lambda message: message.from_user.id in awaiting_balance_grant)
-async def admin_balance_grant_process(message: Message):
-    awaiting_balance_grant.discard(message.from_user.id)
+@dp.message(AdminStates.waiting_balance_grant)
+async def admin_balance_grant_process(message: Message, state: FSMContext):
+    await state.clear()
 
     try:
         target_user_id, amount = map(int, message.text.split())
@@ -915,9 +918,9 @@ async def admin_balance_grant_process(message: Message):
         pass
 
 
-@dp.message(lambda message: message.from_user.id in awaiting_balance_writeoff)
-async def admin_balance_writeoff_process(message: Message):
-    awaiting_balance_writeoff.discard(message.from_user.id)
+@dp.message(AdminStates.waiting_balance_writeoff)
+async def admin_balance_writeoff_process(message: Message, state: FSMContext):
+    await state.clear()
 
     try:
         target_user_id, amount = map(int, message.text.split())
