@@ -963,46 +963,46 @@ async def admin_balance_writeoff_process(message: Message, state: FSMContext):
 
 @dp.message(SpreadStates.waiting_money_question)
 async def process_money_question(message: Message, state: FSMContext):
-    await state.clear()
     await process_spread(
         message,
         "Деньги",
         "💰 Вытягиваю карты для денежного расклада...",
         interpret_money_spread
     )
+    await state.clear()
 
 
 @dp.message(SpreadStates.waiting_career_question)
 async def process_career_question(message: Message, state: FSMContext):
-    await state.clear()
     await process_spread(
         message,
         "Карьера",
         "💼 Вытягиваю карты для карьерного расклада...",
         interpret_career_spread
     )
+    await state.clear()
 
 
 @dp.message(SpreadStates.waiting_relationship_question)
 async def process_relationship_question(message: Message, state: FSMContext):
-    await state.clear()
     await process_spread(
         message,
         "Отношения",
         "❤️ Вытягиваю карты для расклада на отношения...",
         interpret_relationship_spread
     )
+    await state.clear()
 
 
 @dp.message(SpreadStates.waiting_three_card_question)
 async def process_three_card_question(message: Message, state: FSMContext):
-    await state.clear()
     await process_spread(
         message,
         "Общий расклад",
         "🃏 Вытягиваю три карты...",
         interpret_three_cards
     )
+    await state.clear()
 
 
 
