@@ -1,21 +1,21 @@
 import os
 import httpx
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 load_dotenv("/opt/bots/tarot_bot/.env")
 
 PROXY_URL = os.getenv("PROXY_URL")
 
-client = OpenAI(
+client = AsyncOpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
-    http_client=httpx.Client(
+    http_client=httpx.AsyncClient(
         proxy=PROXY_URL,
         timeout=60.0
     )
 )
 
-def interpret_day_card(card):
+async def interpret_day_card(card):
     prompt = f"""
 Ты — AI-ассистент для развлекательных и рефлексивных раскладов Таро.
 
@@ -33,7 +33,7 @@ def interpret_day_card(card):
 Сделай красивую интерпретацию карты дня.
 """
 
-    response = client.responses.create(
+    response = await client.responses.create(
         model="gpt-5.4-mini",
         input=prompt
     )
@@ -41,7 +41,7 @@ def interpret_day_card(card):
     return response.output_text
 
 
-def interpret_three_cards(question, cards):
+async def interpret_three_cards(question, cards):
     cards_text = "\n".join(
         [
             f"{i+1}. {card['name']} ({card['orientation']})"
@@ -81,14 +81,14 @@ def interpret_three_cards(question, cards):
 💡 Совет
 """
 
-    response = client.responses.create(
+    response = await client.responses.create(
         model="gpt-5.4-mini",
         input=prompt
     )
 
     return response.output_text
 
-def interpret_relationship_spread(question, cards):
+async def interpret_relationship_spread(question, cards):
     cards_text = "\n".join(
         [
             f"{i+1}. {card['name']} ({card['orientation']})"
@@ -132,14 +132,14 @@ def interpret_relationship_spread(question, cards):
 мягкий практический вывод для пользователя.
 """
 
-    response = client.responses.create(
+    response = await client.responses.create(
         model="gpt-5.4-mini",
         input=prompt
     )
 
     return response.output_text
 
-def interpret_career_spread(question, cards):
+async def interpret_career_spread(question, cards):
     cards_text = "\n".join(
         [
             f"{i+1}. {card['name']} ({card['orientation']})"
@@ -183,14 +183,14 @@ def interpret_career_spread(question, cards):
 практический вывод для размышления.
 """
 
-    response = client.responses.create(
+    response = await client.responses.create(
         model="gpt-5.4-mini",
         input=prompt
     )
 
     return response.output_text
 
-def interpret_money_spread(question, cards):
+async def interpret_money_spread(question, cards):
     cards_text = "\n".join(
         [
             f"{i+1}. {card['name']} ({card['orientation']})"
@@ -235,7 +235,7 @@ def interpret_money_spread(question, cards):
 осторожный вывод для размышления.
 """
 
-    response = client.responses.create(
+    response = await client.responses.create(
         model="gpt-5.4-mini",
         input=prompt
     )

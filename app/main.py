@@ -257,7 +257,7 @@ async def day_card(message: Message):
 
     await message.answer("🃏 Перемешиваю колоду...")
 
-    interpretation = interpret_day_card(card)
+    interpretation = await interpret_day_card(card)
 
     save_daily_card(message.from_user.id, card, interpretation)
 
@@ -838,7 +838,7 @@ async def process_spread(message: Message, spread_type, intro_text, interpret_fu
     await message.answer("✨ Интерпретирую расклад...")
     await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-    interpretation = interpret_func(question, cards)
+    interpretation = await interpret_func(question, cards)
 
     save_spread(
         user_id=user_id,
