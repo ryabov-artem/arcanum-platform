@@ -1,18 +1,20 @@
-import sqlite3
+import aiosqlite
 from datetime import datetime, date
 
 DB_FILE = "/opt/bots/tarot_bot/data/database.db"
 
 
-def get_connection():
-    return sqlite3.connect(DB_FILE)
+async def get_connection():
+    conn = await aiosqlite.connect(DB_FILE, timeout=30)
+    await conn.execute("PRAGMA journal_mode=WAL")
+    await conn.execute("PRAGMA busy_timeout=5000")
+    return conn
 
 
-def init_db():
-    conn = get_connection()
-    cursor = conn.cursor()
+async def init_db():
+    conn = await get_connection()
 
-    cursor.execute("""
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS users (
         user_id INTEGER PRIMARY KEY,
         username TEXT,
@@ -21,7 +23,7 @@ def init_db():
     )
     """)
 
-    cursor.execute("""
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS daily_cards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -33,14 +35,14 @@ def init_db():
     )
     """)
 
-    cursor.execute("""
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS user_balance (
         user_id INTEGER PRIMARY KEY,
         spreads INTEGER DEFAULT 0
     )
     """)
 
-    cursor.execute("""
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS spreads (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
@@ -52,15 +54,32 @@ def init_db():
     )
     """)
 
-    conn.commit()
-    conn.close()
+    await conn.execute("""
+    CREATE TABLE IF NOT EXISTS user_limits (
+        user_id INTEGER PRIMARY KEY,
+        free_spread_used INTEGER DEFAULT 0,
+        paid_spreads INTEGER DEFAULT 0
+    )
+    """)
+
+    await conn.execute("""
+    CREATE TABLE IF NOT EXISTS payments (
+        payment_id TEXT PRIMARY KEY,
+        user_id INTEGER,
+        amount REAL,
+        spreads_added INTEGER,
+        created_at TEXT
+    )
+    """)
+
+    await conn.commit()
+    await conn.close()
 
 
-def save_user(user):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def save_user(user):
+    conn = await get_connection()
 
-    cursor.execute("""
+    await conn.execute("""
     INSERT OR IGNORE INTO users
     (user_id, username, first_name, created_at)
     VALUES (?, ?, ?, ?)
@@ -71,17 +90,15 @@ def save_user(user):
         datetime.now().isoformat()
     ))
 
-    conn.commit()
-    conn.close()
+    await conn.commit()
+    await conn.close()
 
 
-def get_today_card(user_id):
-    conn = get_connection()
-    cursor = conn.cursor()
-
+async def get_today_card(user_id):
+    conn = await get_connection()
     today = date.today().isoformat()
 
-    cursor.execute("""
+    cursor = await conn.execute("""
     SELECT card_name, orientation, interpretation
     FROM daily_cards
     WHERE user_id = ?
@@ -89,8 +106,8 @@ def get_today_card(user_id):
     LIMIT 1
     """, (user_id, today))
 
-    row = cursor.fetchone()
-    conn.close()
+    row = await cursor.fetchone()
+    await conn.close()
 
     if row:
         return {
@@ -102,11 +119,10 @@ def get_today_card(user_id):
     return None
 
 
-def save_daily_card(user_id, card, interpretation):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def save_daily_card(user_id, card, interpretation):
+    conn = await get_connection()
 
-    cursor.execute("""
+    await conn.execute("""
     INSERT INTO daily_cards
     (
         user_id,
@@ -126,13 +142,12 @@ def save_daily_card(user_id, card, interpretation):
         datetime.now().isoformat()
     ))
 
-    conn.commit()
-    conn.close()
+    await conn.commit()
+    await conn.close()
 
 
-def save_spread(user_id, spread_type, question, cards, answer):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def save_spread(user_id, spread_type, question, cards, answer):
+    conn = await get_connection()
 
     cards_text = "; ".join(
         [
@@ -141,7 +156,7 @@ def save_spread(user_id, spread_type, question, cards, answer):
         ]
     )
 
-    cursor.execute("""
+    await conn.execute("""
     INSERT INTO spreads
     (
         user_id,
@@ -161,15 +176,14 @@ def save_spread(user_id, spread_type, question, cards, answer):
         datetime.now().isoformat()
     ))
 
-    conn.commit()
-    conn.close()
+    await conn.commit()
+    await conn.close()
 
 
-def get_user_spreads(user_id, limit=5):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def get_user_spreads(user_id, limit=5):
+    conn = await get_connection()
 
-    cursor.execute("""
+    cursor = await conn.execute("""
     SELECT
         id,
         spread_type,
@@ -183,8 +197,8 @@ def get_user_spreads(user_id, limit=5):
     LIMIT ?
     """, (user_id, limit))
 
-    rows = cursor.fetchall()
-    conn.close()
+    rows = await cursor.fetchall()
+    await conn.close()
 
     result = []
 
@@ -200,38 +214,35 @@ def get_user_spreads(user_id, limit=5):
 
     return result
 
-def get_users_count():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM users")
-    count = cursor.fetchone()[0]
-    conn.close()
+
+async def get_users_count():
+    conn = await get_connection()
+    cursor = await conn.execute("SELECT COUNT(*) FROM users")
+    count = (await cursor.fetchone())[0]
+    await conn.close()
     return count
 
 
-def get_daily_cards_count():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM daily_cards")
-    count = cursor.fetchone()[0]
-    conn.close()
+async def get_daily_cards_count():
+    conn = await get_connection()
+    cursor = await conn.execute("SELECT COUNT(*) FROM daily_cards")
+    count = (await cursor.fetchone())[0]
+    await conn.close()
     return count
 
 
-def get_spreads_count():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM spreads")
-    count = cursor.fetchone()[0]
-    conn.close()
+async def get_spreads_count():
+    conn = await get_connection()
+    cursor = await conn.execute("SELECT COUNT(*) FROM spreads")
+    count = (await cursor.fetchone())[0]
+    await conn.close()
     return count
 
 
-def get_recent_spreads(limit=10):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def get_recent_spreads(limit=10):
+    conn = await get_connection()
 
-    cursor.execute("""
+    cursor = await conn.execute("""
     SELECT
         spreads.id,
         spreads.user_id,
@@ -247,8 +258,8 @@ def get_recent_spreads(limit=10):
     LIMIT ?
     """, (limit,))
 
-    rows = cursor.fetchall()
-    conn.close()
+    rows = await cursor.fetchall()
+    await conn.close()
 
     return [
         {
@@ -265,11 +276,10 @@ def get_recent_spreads(limit=10):
     ]
 
 
-def get_recent_users(limit=10):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def get_recent_users(limit=10):
+    conn = await get_connection()
 
-    cursor.execute("""
+    cursor = await conn.execute("""
     SELECT
         user_id,
         username,
@@ -280,8 +290,8 @@ def get_recent_users(limit=10):
     LIMIT ?
     """, (limit,))
 
-    rows = cursor.fetchall()
-    conn.close()
+    rows = await cursor.fetchall()
+    await conn.close()
 
     return [
         {
@@ -293,11 +303,11 @@ def get_recent_users(limit=10):
         for row in rows
     ]
 
-def can_use_free_spread(user_id):
-    conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
+async def can_use_free_spread(user_id):
+    conn = await get_connection()
+
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS user_limits (
         user_id INTEGER PRIMARY KEY,
         free_spread_used INTEGER DEFAULT 0,
@@ -305,16 +315,16 @@ def can_use_free_spread(user_id):
     )
     """)
 
-    cursor.execute("""
+    cursor = await conn.execute("""
     SELECT free_spread_used
     FROM user_limits
     WHERE user_id = ?
     """, (user_id,))
 
-    row = cursor.fetchone()
+    row = await cursor.fetchone()
 
-    conn.commit()
-    conn.close()
+    await conn.commit()
+    await conn.close()
 
     if row is None:
         return True
@@ -322,11 +332,10 @@ def can_use_free_spread(user_id):
     return row[0] == 0
 
 
-def mark_free_spread_used(user_id):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def mark_free_spread_used(user_id):
+    conn = await get_connection()
 
-    cursor.execute("""
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS user_limits (
         user_id INTEGER PRIMARY KEY,
         free_spread_used INTEGER DEFAULT 0,
@@ -334,7 +343,7 @@ def mark_free_spread_used(user_id):
     )
     """)
 
-    cursor.execute("""
+    await conn.execute("""
     INSERT OR REPLACE INTO user_limits
     (user_id, free_spread_used, paid_spreads)
     VALUES (
@@ -351,14 +360,14 @@ def mark_free_spread_used(user_id):
     )
     """, (user_id, user_id))
 
-    conn.commit()
-    conn.close()
+    await conn.commit()
+    await conn.close()
 
-def get_spread_type_stats():
-    conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
+async def get_spread_type_stats():
+    conn = await get_connection()
+
+    cursor = await conn.execute("""
     SELECT
         spread_type,
         COUNT(*) as count
@@ -367,8 +376,8 @@ def get_spread_type_stats():
     ORDER BY count DESC
     """)
 
-    rows = cursor.fetchall()
-    conn.close()
+    rows = await cursor.fetchall()
+    await conn.close()
 
     return [
         {
@@ -378,76 +387,72 @@ def get_spread_type_stats():
         for row in rows
     ]
 
-def get_all_user_ids():
-    conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
+async def get_all_user_ids():
+    conn = await get_connection()
+
+    cursor = await conn.execute("""
     SELECT user_id
     FROM users
     ORDER BY created_at ASC
     """)
 
-    rows = cursor.fetchall()
-    conn.close()
+    rows = await cursor.fetchall()
+    await conn.close()
 
     return [row[0] for row in rows]
 
 
-def get_balance(user_id):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def get_balance(user_id):
+    conn = await get_connection()
 
-    cursor.execute(
+    cursor = await conn.execute(
         "SELECT spreads FROM user_balance WHERE user_id = ?",
         (user_id,)
     )
 
-    row = cursor.fetchone()
-    conn.close()
+    row = await cursor.fetchone()
+    await conn.close()
 
     return row[0] if row else 0
 
 
-def add_balance(user_id, amount):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def add_balance(user_id, amount):
+    conn = await get_connection()
 
-    cursor.execute("""
+    await conn.execute("""
     INSERT OR IGNORE INTO user_balance(user_id, spreads)
     VALUES (?, 0)
     """, (user_id,))
 
-    cursor.execute("""
+    await conn.execute("""
     UPDATE user_balance
     SET spreads = spreads + ?
     WHERE user_id = ?
     """, (amount, user_id))
 
-    conn.commit()
-    conn.close()
+    await conn.commit()
+    await conn.close()
 
 
-def spend_balance(user_id):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def spend_balance(user_id):
+    conn = await get_connection()
 
-    cursor.execute("""
+    await conn.execute("""
     UPDATE user_balance
     SET spreads = spreads - 1
     WHERE user_id = ?
       AND spreads > 0
     """, (user_id,))
 
-    conn.commit()
-    conn.close()
+    await conn.commit()
+    await conn.close()
 
 
-def save_payment(payment_id, user_id, amount, spreads_added):
-    conn = get_connection()
-    cursor = conn.cursor()
+async def save_payment(payment_id, user_id, amount, spreads_added):
+    conn = await get_connection()
 
-    cursor.execute("""
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS payments (
         payment_id TEXT PRIMARY KEY,
         user_id INTEGER,
@@ -457,7 +462,7 @@ def save_payment(payment_id, user_id, amount, spreads_added):
     )
     """)
 
-    cursor.execute("""
+    await conn.execute("""
     INSERT OR IGNORE INTO payments
     (
         payment_id,
@@ -475,14 +480,14 @@ def save_payment(payment_id, user_id, amount, spreads_added):
         datetime.now().isoformat()
     ))
 
-    conn.commit()
-    conn.close()
+    await conn.commit()
+    await conn.close()
 
-def get_top_users(limit=10):
-    conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
+async def get_top_users(limit=10):
+    conn = await get_connection()
+
+    cursor = await conn.execute("""
     SELECT
         payments.user_id,
         users.username,
@@ -496,9 +501,9 @@ def get_top_users(limit=10):
     ORDER BY total_amount DESC
     LIMIT ?
     """, (limit,))
-    top_payers = cursor.fetchall()
+    top_payers = await cursor.fetchall()
 
-    cursor.execute("""
+    cursor = await conn.execute("""
     SELECT
         spreads.user_id,
         users.username,
@@ -510,9 +515,9 @@ def get_top_users(limit=10):
     ORDER BY spreads_count DESC
     LIMIT ?
     """, (limit,))
-    top_spreads = cursor.fetchall()
+    top_spreads = await cursor.fetchall()
 
-    conn.close()
+    await conn.close()
 
     return {
         "top_payers": [
@@ -537,26 +542,26 @@ def get_top_users(limit=10):
         ],
     }
 
-def get_sales_funnel():
-    conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("SELECT COUNT(*) FROM users")
-    users_count = cursor.fetchone()[0]
+async def get_sales_funnel():
+    conn = await get_connection()
 
-    cursor.execute("SELECT COUNT(DISTINCT user_id) FROM daily_cards")
-    daily_card_users = cursor.fetchone()[0]
+    cursor = await conn.execute("SELECT COUNT(*) FROM users")
+    users_count = (await cursor.fetchone())[0]
 
-    cursor.execute("SELECT COUNT(DISTINCT user_id) FROM spreads")
-    spread_users = cursor.fetchone()[0]
+    cursor = await conn.execute("SELECT COUNT(DISTINCT user_id) FROM daily_cards")
+    daily_card_users = (await cursor.fetchone())[0]
 
-    cursor.execute("SELECT COUNT(DISTINCT user_id) FROM payments")
-    paying_users = cursor.fetchone()[0]
+    cursor = await conn.execute("SELECT COUNT(DISTINCT user_id) FROM spreads")
+    spread_users = (await cursor.fetchone())[0]
+
+    cursor = await conn.execute("SELECT COUNT(DISTINCT user_id) FROM payments")
+    paying_users = (await cursor.fetchone())[0]
 
     conversion_to_spread = round((spread_users / users_count * 100), 1) if users_count else 0
     conversion_to_payment = round((paying_users / users_count * 100), 1) if users_count else 0
 
-    conn.close()
+    await conn.close()
 
     return {
         "users_count": users_count,
@@ -567,11 +572,11 @@ def get_sales_funnel():
         "conversion_to_payment": conversion_to_payment,
     }
 
-def get_recent_payments(limit=10):
-    conn = get_connection()
-    cursor = conn.cursor()
 
-    cursor.execute("""
+async def get_recent_payments(limit=10):
+    conn = await get_connection()
+
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS payments (
         payment_id TEXT PRIMARY KEY,
         user_id INTEGER,
@@ -581,7 +586,7 @@ def get_recent_payments(limit=10):
     )
     """)
 
-    cursor.execute("""
+    cursor = await conn.execute("""
     SELECT
         payments.payment_id,
         payments.user_id,
@@ -596,8 +601,8 @@ def get_recent_payments(limit=10):
     LIMIT ?
     """, (limit,))
 
-    rows = cursor.fetchall()
-    conn.close()
+    rows = await cursor.fetchall()
+    await conn.close()
 
     return [
         {
@@ -614,11 +619,10 @@ def get_recent_payments(limit=10):
     ]
 
 
-def get_payments_stats():
-    conn = get_connection()
-    cursor = conn.cursor()
+async def get_payments_stats():
+    conn = await get_connection()
 
-    cursor.execute("""
+    await conn.execute("""
     CREATE TABLE IF NOT EXISTS payments (
         payment_id TEXT PRIMARY KEY,
         user_id INTEGER,
@@ -628,13 +632,13 @@ def get_payments_stats():
     )
     """)
 
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount), 0), COALESCE(SUM(spreads_added), 0) FROM payments")
-    total_count, total_amount, total_spreads = cursor.fetchone()
+    cursor = await conn.execute("SELECT COUNT(*), COALESCE(SUM(amount), 0), COALESCE(SUM(spreads_added), 0) FROM payments")
+    total_count, total_amount, total_spreads = await cursor.fetchone()
 
-    cursor.execute("SELECT COUNT(*), COALESCE(SUM(amount), 0), COALESCE(SUM(spreads_added), 0) FROM payments WHERE date(created_at) = date('now', 'localtime')")
-    today_count, today_amount, today_spreads = cursor.fetchone()
+    cursor = await conn.execute("SELECT COUNT(*), COALESCE(SUM(amount), 0), COALESCE(SUM(spreads_added), 0) FROM payments WHERE date(created_at) = date('now', 'localtime')")
+    today_count, today_amount, today_spreads = await cursor.fetchone()
 
-    conn.close()
+    await conn.close()
 
     return {
         "total_count": total_count,

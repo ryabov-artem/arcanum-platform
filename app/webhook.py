@@ -84,11 +84,11 @@ async def yookassa_webhook(request):
     if payment_already_processed(payment_id):
         return web.json_response({"ok": True, "status": "already_processed"})
 
-    add_balance(user_id, count)
+    await add_balance(user_id, count)
     mark_payment_processed(payment_id, user_id, count)
-    save_payment(payment_id, user_id, amount_rub, count)
+    await save_payment(payment_id, user_id, amount_rub, count)
 
-    balance = get_balance(user_id)
+    balance = await get_balance(user_id)
 
     await send_telegram_message(
         user_id,

@@ -138,24 +138,24 @@ promo_keyboard = ReplyKeyboardMarkup(
 )
 
 
-def user_has_spread_access(user_id):
+async def user_has_spread_access(user_id):
     if user_id == ADMIN_ID:
         return True
 
-    if can_use_free_spread(user_id):
+    if await can_use_free_spread(user_id):
         return True
 
-    if get_balance(user_id) > 0:
+    if await get_balance(user_id) > 0:
         return True
 
     return False
 
 
-def charge_user_for_spread(user_id):
-    if can_use_free_spread(user_id):
-        mark_free_spread_used(user_id)
-    elif get_balance(user_id) > 0:
-        spend_balance(user_id)
+async def charge_user_for_spread(user_id):
+    if await can_use_free_spread(user_id):
+        await mark_free_spread_used(user_id)
+    elif await get_balance(user_id) > 0:
+        await spend_balance(user_id)
 
 
 async def no_access_message(message: Message):
@@ -171,7 +171,7 @@ async def no_access_message(message: Message):
 
 @dp.message(CommandStart())
 async def start(message: Message):
-    save_user(message.from_user)
+    await save_user(message.from_user)
 
     await message.answer(
         "🔮 Арканум\n\n"
@@ -218,7 +218,7 @@ async def admin_give_balance(message: Message):
         await message.answer("COUNT должен быть больше 0.")
         return
 
-    add_balance(target_user_id, amount)
+    await add_balance(target_user_id, amount)
 
     await message.answer(
         f"✅ Начислено {amount} расклад(ов).\n"
@@ -239,9 +239,9 @@ async def admin_give_balance(message: Message):
 
 @dp.message(F.text == "🎁 Карта дня")
 async def day_card(message: Message):
-    save_user(message.from_user)
+    await save_user(message.from_user)
 
-    existing_card = get_today_card(message.from_user.id)
+    existing_card = await get_today_card(message.from_user.id)
 
     if existing_card:
         await message.answer(
@@ -259,7 +259,7 @@ async def day_card(message: Message):
 
     interpretation = await interpret_day_card(card)
 
-    save_daily_card(message.from_user.id, card, interpretation)
+    await save_daily_card(message.from_user.id, card, interpretation)
 
     photo = FSInputFile(f"/opt/bots/tarot_bot/data/cards/{card['image']}")
 
@@ -272,9 +272,9 @@ async def day_card(message: Message):
 
 @dp.message(F.text == "💎 Баланс")
 async def balance(message: Message):
-    save_user(message.from_user)
+    await save_user(message.from_user)
 
-    balance_count = get_balance(message.from_user.id)
+    balance_count = await get_balance(message.from_user.id)
 
     await message.answer(
         f"💎 Баланс раскладов\n\n"
@@ -423,7 +423,7 @@ async def buy_twenty_spreads(message: Message):
 
 @dp.message(F.text == "🌟 Общий расклад")
 async def three_cards_start(message: Message):
-    save_user(message.from_user)
+    await save_user(message.from_user)
     awaiting_three_card_question.add(message.from_user.id)
 
     await message.answer(
@@ -437,7 +437,7 @@ async def three_cards_start(message: Message):
 
 @dp.message(F.text == "❤️ Отношения")
 async def relationships(message: Message):
-    save_user(message.from_user)
+    await save_user(message.from_user)
     awaiting_relationship_question.add(message.from_user.id)
 
     await message.answer(
@@ -451,7 +451,7 @@ async def relationships(message: Message):
 
 @dp.message(F.text == "💼 Карьера")
 async def career(message: Message):
-    save_user(message.from_user)
+    await save_user(message.from_user)
     awaiting_career_question.add(message.from_user.id)
 
     await message.answer(
@@ -465,7 +465,7 @@ async def career(message: Message):
 
 @dp.message(F.text == "💰 Деньги")
 async def money(message: Message):
-    save_user(message.from_user)
+    await save_user(message.from_user)
     awaiting_money_question.add(message.from_user.id)
 
     await message.answer(
@@ -479,9 +479,9 @@ async def money(message: Message):
 
 @dp.message(F.text == "📜 История")
 async def history(message: Message):
-    save_user(message.from_user)
+    await save_user(message.from_user)
 
-    spreads = get_user_spreads(message.from_user.id, limit=5)
+    spreads = await get_user_spreads(message.from_user.id, limit=5)
 
     if not spreads:
         await message.answer(
@@ -545,9 +545,9 @@ async def admin_stats(message: Message):
 
     await message.answer(
         "📈 Статистика\n\n"
-        f"👥 Пользователей: {get_users_count()}\n"
-        f"🎁 Карт дня: {get_daily_cards_count()}\n"
-        f"🔮 Раскладов: {get_spreads_count()}"
+        f"👥 Пользователей: {await get_users_count()}\n"
+        f"🎁 Карт дня: {await get_daily_cards_count()}\n"
+        f"🔮 Раскладов: {await get_spreads_count()}"
     )
 
 
@@ -557,7 +557,7 @@ async def admin_users(message: Message):
         await message.answer("Нет доступа.")
         return
 
-    users = get_recent_users(limit=10)
+    users = await get_recent_users(limit=10)
 
     if not users:
         await message.answer("Пользователей пока нет.")
@@ -585,7 +585,7 @@ async def admin_recent_spreads(message: Message):
         await message.answer("Нет доступа.")
         return
 
-    spreads = get_recent_spreads(limit=10)
+    spreads = await get_recent_spreads(limit=10)
 
     if not spreads:
         await message.answer("Раскладов пока нет.")
@@ -614,7 +614,7 @@ async def admin_popularity(message: Message):
         await message.answer("Нет доступа.")
         return
 
-    stats = get_spread_type_stats()
+    stats = await get_spread_type_stats()
 
     if not stats:
         await message.answer("📊 Пока нет данных по раскладам.")
@@ -710,7 +710,7 @@ async def admin_sales_funnel(message: Message):
         await message.answer("Нет доступа.")
         return
 
-    funnel = get_sales_funnel()
+    funnel = await get_sales_funnel()
 
     await message.answer(
         "📈 Воронка продаж\n\n"
@@ -730,7 +730,7 @@ async def admin_top_users(message: Message):
         await message.answer("Нет доступа.")
         return
 
-    data = get_top_users(10)
+    data = await get_top_users(10)
 
     text = "🏆 Топ пользователей\n\n"
 
@@ -782,7 +782,7 @@ async def confirm_broadcast(message: Message):
         return
 
     text_to_send = pending_broadcast.pop(user_id)
-    user_ids = get_all_user_ids()
+    user_ids = await get_all_user_ids()
 
     success = 0
     failed = 0
@@ -818,7 +818,7 @@ async def cancel_broadcast(message: Message):
 async def process_spread(message: Message, spread_type, intro_text, interpret_func):
     user_id = message.from_user.id
 
-    if not user_has_spread_access(user_id):
+    if not await user_has_spread_access(user_id):
         await no_access_message(message)
         return
 
@@ -840,7 +840,7 @@ async def process_spread(message: Message, spread_type, intro_text, interpret_fu
 
     interpretation = await interpret_func(question, cards)
 
-    save_spread(
+    await save_spread(
         user_id=user_id,
         spread_type=spread_type,
         question=question,
@@ -848,7 +848,7 @@ async def process_spread(message: Message, spread_type, intro_text, interpret_fu
         answer=interpretation
     )
 
-    charge_user_for_spread(user_id)
+    await charge_user_for_spread(user_id)
 
     await message.answer(
         f"🔮 {spread_type}\n\n"
@@ -891,7 +891,7 @@ async def admin_balance_grant_process(message: Message):
         await message.answer("Количество должно быть больше 0.", reply_markup=admin_keyboard)
         return
 
-    add_balance(target_user_id, amount)
+    await add_balance(target_user_id, amount)
 
     await message.answer(
         f"✅ Начислено {amount} расклад(ов).\nПользователь: {target_user_id}",
@@ -924,7 +924,7 @@ async def admin_balance_writeoff_process(message: Message):
         await message.answer("Количество должно быть больше 0.", reply_markup=admin_keyboard)
         return
 
-    current_balance = get_balance(target_user_id)
+    current_balance = await get_balance(target_user_id)
 
     if current_balance < amount:
         await message.answer(
@@ -934,7 +934,7 @@ async def admin_balance_writeoff_process(message: Message):
         return
 
     for _ in range(amount):
-        spend_balance(target_user_id)
+        await spend_balance(target_user_id)
 
     await message.answer(
         f"✅ Списано {amount} расклад(ов).\nПользователь: {target_user_id}",
@@ -1002,7 +1002,7 @@ async def fallback(message: Message):
 
 
 async def main():
-    init_db()
+    await init_db()
     await dp.start_polling(bot)
 
 
