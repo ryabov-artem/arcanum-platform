@@ -41,6 +41,8 @@ from tarot import draw_card, draw_three_cards
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.filters import CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
 from dotenv import load_dotenv
 from yookassa import Configuration, Payment
@@ -64,14 +66,17 @@ session = AiohttpSession(proxy=PROXY_URL)
 bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 
-awaiting_three_card_question = set()
-awaiting_relationship_question = set()
-awaiting_career_question = set()
-awaiting_money_question = set()
 awaiting_broadcast_text = set()
 awaiting_balance_grant = set()
 awaiting_balance_writeoff = set()
 pending_broadcast = {}
+
+
+class SpreadStates(StatesGroup):
+    waiting_three_card_question = State()
+    waiting_relationship_question = State()
+    waiting_career_question = State()
+    waiting_money_question = State()
 
 
 def markdown_bold_to_html(text):
@@ -422,9 +427,9 @@ async def buy_twenty_spreads(message: Message):
 
 
 @dp.message(F.text == "🌟 Общий расклад")
-async def three_cards_start(message: Message):
+async def three_cards_start(message: Message, state: FSMContext):
     await save_user(message.from_user)
-    awaiting_three_card_question.add(message.from_user.id)
+    await state.set_state(SpreadStates.waiting_three_card_question)
 
     await message.answer(
         "🌟 Напиши свой вопрос для общего расклада.\n\n"
@@ -436,9 +441,9 @@ async def three_cards_start(message: Message):
 
 
 @dp.message(F.text == "❤️ Отношения")
-async def relationships(message: Message):
+async def relationships(message: Message, state: FSMContext):
     await save_user(message.from_user)
-    awaiting_relationship_question.add(message.from_user.id)
+    await state.set_state(SpreadStates.waiting_relationship_question)
 
     await message.answer(
         "❤️ Напиши вопрос для расклада на отношения.\n\n"
@@ -450,9 +455,9 @@ async def relationships(message: Message):
 
 
 @dp.message(F.text == "💼 Карьера")
-async def career(message: Message):
+async def career(message: Message, state: FSMContext):
     await save_user(message.from_user)
-    awaiting_career_question.add(message.from_user.id)
+    await state.set_state(SpreadStates.waiting_career_question)
 
     await message.answer(
         "💼 Напиши вопрос для карьерного расклада.\n\n"
@@ -464,9 +469,9 @@ async def career(message: Message):
 
 
 @dp.message(F.text == "💰 Деньги")
-async def money(message: Message):
+async def money(message: Message, state: FSMContext):
     await save_user(message.from_user)
-    awaiting_money_question.add(message.from_user.id)
+    await state.set_state(SpreadStates.waiting_money_question)
 
     await message.answer(
         "💰 Напиши вопрос для денежного расклада.\n\n"
@@ -942,6 +947,51 @@ async def admin_balance_writeoff_process(message: Message):
     )
 
 
+
+@dp.message(SpreadStates.waiting_money_question)
+async def process_money_question(message: Message, state: FSMContext):
+    await state.clear()
+    await process_spread(
+        message,
+        "Деньги",
+        "💰 Вытягиваю карты для денежного расклада...",
+        interpret_money_spread
+    )
+
+
+@dp.message(SpreadStates.waiting_career_question)
+async def process_career_question(message: Message, state: FSMContext):
+    await state.clear()
+    await process_spread(
+        message,
+        "Карьера",
+        "💼 Вытягиваю карты для карьерного расклада...",
+        interpret_career_spread
+    )
+
+
+@dp.message(SpreadStates.waiting_relationship_question)
+async def process_relationship_question(message: Message, state: FSMContext):
+    await state.clear()
+    await process_spread(
+        message,
+        "Отношения",
+        "❤️ Вытягиваю карты для расклада на отношения...",
+        interpret_relationship_spread
+    )
+
+
+@dp.message(SpreadStates.waiting_three_card_question)
+async def process_three_card_question(message: Message, state: FSMContext):
+    await state.clear()
+    await process_spread(
+        message,
+        "Общий расклад",
+        "🃏 Вытягиваю три карты...",
+        interpret_three_cards
+    )
+
+
 @dp.message()
 async def fallback(message: Message):
     user_id = message.from_user.id
@@ -955,46 +1005,6 @@ async def fallback(message: Message):
             f"{message.text}\n\n"
             "Отправить?",
             reply_markup=broadcast_confirm_keyboard
-        )
-        return
-
-    if user_id in awaiting_money_question:
-        awaiting_money_question.remove(user_id)
-        await process_spread(
-            message,
-            "Деньги",
-            "💰 Вытягиваю карты для денежного расклада...",
-            interpret_money_spread
-        )
-        return
-
-    if user_id in awaiting_career_question:
-        awaiting_career_question.remove(user_id)
-        await process_spread(
-            message,
-            "Карьера",
-            "💼 Вытягиваю карты для карьерного расклада...",
-            interpret_career_spread
-        )
-        return
-
-    if user_id in awaiting_relationship_question:
-        awaiting_relationship_question.remove(user_id)
-        await process_spread(
-            message,
-            "Отношения",
-            "❤️ Вытягиваю карты для расклада на отношения...",
-            interpret_relationship_spread
-        )
-        return
-
-    if user_id in awaiting_three_card_question:
-        awaiting_three_card_question.remove(user_id)
-        await process_spread(
-            message,
-            "Общий расклад",
-            "🃏 Вытягиваю три карты...",
-            interpret_three_cards
         )
         return
 
