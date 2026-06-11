@@ -94,16 +94,11 @@ def get_main_keyboard(user_id):
 
 admin_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="👥 Пользователи")],
-        [KeyboardButton(text="📈 Статистика")],
-        [KeyboardButton(text="📜 Последние расклады")],
-        [KeyboardButton(text="📊 Популярность")],
-        [KeyboardButton(text="📣 Рассылка")],
-        [KeyboardButton(text="🎁 Акции")],
-        [KeyboardButton(text="📈 Воронка")],
-        [KeyboardButton(text="🏆 Топ")],
-        [KeyboardButton(text="➕ Начислить баланс")],
-        [KeyboardButton(text="➖ Списать баланс")],
+        [KeyboardButton(text="👥 Пользователи"), KeyboardButton(text="📈 Статистика")],
+        [KeyboardButton(text="📜 Последние расклады"), KeyboardButton(text="📊 Популярность")],
+        [KeyboardButton(text="📣 Рассылка"), KeyboardButton(text="🎁 Акции")],
+        [KeyboardButton(text="📈 Воронка"), KeyboardButton(text="🏆 Топ")],
+        [KeyboardButton(text="➕ Начислить баланс"), KeyboardButton(text="➖ Списать баланс")],
         [KeyboardButton(text="⬅️ Назад")]
     ],
     resize_keyboard=True
