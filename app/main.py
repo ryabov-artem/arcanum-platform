@@ -502,13 +502,24 @@ async def history(message: Message):
         )
         return
 
-    text = "📜 Последние расклады:\n\n"
+    text = "📜 История раскладов\n\n"
 
-    for spread in spreads:
+    emoji_map = {
+        "Общий расклад": "🔮",
+        "Отношения": "❤️",
+        "Карьера": "🎯",
+        "Деньги": "💰",
+        "Расклад 3 карты": "🃏",
+        "Личная матрица": "✨",
+    }
+
+    for idx, spread in enumerate(spreads, start=1):
+        spread_type = spread['spread_type']
+        emoji = emoji_map.get(spread_type, "🔮")
+
         text += (
-            f"🔮 #{spread['id']} — {spread['spread_type']}\n"
-            f"Вопрос: {spread['question']}\n"
-            f"Карты: {spread['cards']}\n\n"
+            f"{idx}. {emoji} {spread_type}\n"
+            f"❓ {spread['question']}\n\n"
         )
 
     await message.answer(text)
@@ -1080,3 +1091,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
