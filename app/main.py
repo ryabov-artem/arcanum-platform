@@ -66,13 +66,69 @@ session = AiohttpSession(proxy=PROXY_URL)
 bot = Bot(token=BOT_TOKEN, session=session)
 dp = Dispatcher()
 
+active_heavy_requests = set()
+
+
+async def acquire_heavy_request(message: Message) -> bool:
+    user_id = message.from_user.id
+
+    if user_id in active_heavy_requests:
+        await message.answer("⏳ Запрос уже обрабатывается. Дождитесь результата.")
+        return False
+
+    active_heavy_requests.add(user_id)
+    return True
+
+
+def release_heavy_request(user_id: int):
+    active_heavy_requests.discard(user_id)
+
+
+async def safe_delete_current_message(message: Message):
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+
+async def remember_flow_message(state: FSMContext, sent_message: Message):
+    data = await state.get_data()
+    ids = data.get("flow_message_ids", [])
+    ids.append(sent_message.message_id)
+    await state.update_data(flow_message_ids=ids)
+
+
+async def cleanup_flow_messages(message: Message, state: FSMContext):
+    data = await state.get_data()
+    ids = data.get("flow_message_ids", [])
+
+    for message_id in ids:
+        try:
+            await message.bot.delete_message(message.chat.id, message_id)
+        except Exception:
+            pass
+
+    await state.update_data(flow_message_ids=[])
+
+
  
 
 
 class SpreadStates(StatesGroup):
+    waiting_three_card_preview = State()
+    waiting_three_card_confirm = State()
     waiting_three_card_question = State()
+
+    waiting_relationship_preview = State()
+    waiting_relationship_confirm = State()
     waiting_relationship_question = State()
+
+    waiting_career_preview = State()
+    waiting_career_confirm = State()
     waiting_career_question = State()
+
+    waiting_money_preview = State()
+    waiting_money_confirm = State()
     waiting_money_question = State()
 
 
@@ -94,7 +150,7 @@ def get_main_keyboard(user_id):
         [KeyboardButton(text="🎁 Карта дня"), KeyboardButton(text="🌟 Общий расклад")],
         [KeyboardButton(text="❤️ Отношения"), KeyboardButton(text="💼 Карьера")],
         [KeyboardButton(text="💰 Деньги"), KeyboardButton(text="💎 Баланс")],
-        [KeyboardButton(text="📜 История"), KeyboardButton(text="ℹ️ О боте")]
+        [KeyboardButton(text="ℹ️ О боте")]
     ]
 
     if user_id == ADMIN_ID:
@@ -121,11 +177,29 @@ admin_keyboard = ReplyKeyboardMarkup(
 
 shop_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="🪙 Купить 1 расклад — 99 ₽")],
-        [KeyboardButton(text="💎 Купить 5 раскладов — 299 ₽")],
-        [KeyboardButton(text="🔮 Купить 10 раскладов — 499 ₽")],
-        [KeyboardButton(text="👑 Купить 20 раскладов — 799 ₽")],
+        [KeyboardButton(text="🪙 Купить 1 кредит — 99 ₽")],
+        [KeyboardButton(text="💎 Купить 5 кредитов — 299 ₽")],
+        [KeyboardButton(text="✨ Купить 10 кредитов — 499 ₽")],
+        [KeyboardButton(text="👑 Купить 20 кредитов — 799 ₽")],
         [KeyboardButton(text="⬅️ Назад")]
+    ],
+    resize_keyboard=True
+)
+
+
+service_preview_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="✨ Получить расклад")],
+        [KeyboardButton(text="⬅️ Назад")]
+    ],
+    resize_keyboard=True
+)
+
+
+product_confirm_keyboard = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="✅ Да")],
+        [KeyboardButton(text="⬅️ Отмена")]
     ],
     resize_keyboard=True
 )
@@ -172,13 +246,37 @@ async def charge_user_for_spread(user_id):
 
 async def no_access_message(message: Message):
     await message.answer(
-        "💎 Бесплатный расклад уже использован.\n\n"
+        "💎 Бесплатный кредит уже использован.\n\n"
         "Доступные тарифы:\n"
-        "• 1 расклад — 99 ₽\n"
-        "• 5 раскладов — 299 ₽\n\n"
-        "Пополните баланс и возвращайтесь за новым раскладом 🔮\n"
-        "Пока можешь пользоваться бесплатной картой дня 🎁"
+        "• 1 кредит — 99 ₽\n"
+        "• 5 кредитов — 299 ₽\n"
+        "• 10 кредитов — 499 ₽\n"
+        "• 20 кредитов — 799 ₽\n\n"
+        "Пополните баланс и возвращайтесь за новым раскладом ✨",
+        reply_markup=shop_keyboard
     )
+
+async def ask_product_confirm(message: Message, state: FSMContext, confirm_state, title: str):
+    if not await user_has_spread_access(message.from_user.id):
+        await state.clear()
+        await no_access_message(message)
+        return
+
+    balance = await get_balance(message.from_user.id)
+    free_text = " + бесплатный кредит" if await can_use_free_spread(message.from_user.id) else ""
+    balance_text = "админ-доступ ∞" if message.from_user.id == ADMIN_ID else f"{balance} кредит(ов){free_text}"
+
+    await state.set_state(confirm_state)
+
+    sent = await message.answer(
+        f"{title}\n\n"
+        f"Стоимость: <b>1</b> кредит\n"
+        f"Ваш баланс: <b>{balance_text}</b>\n\n"
+        f"Списать 1 кредит и перейти к вопросу?",
+        parse_mode="HTML",
+        reply_markup=product_confirm_keyboard
+    )
+    await remember_flow_message(state, sent)
 
 
 @dp.message(CommandStart())
@@ -196,7 +294,7 @@ async def start(message: Message):
         "💼 Карьера\n"
         "💰 Деньги\n\n"
         "🎁 Карта дня доступна бесплатно каждый день.\n\n"
-        "Для остальных разделов используются разборы с баланса.\n\n"
+        "Для остальных разделов используются кредиты.\n\n"
         "Выберите интересующий раздел ниже 👇",
         reply_markup=get_main_keyboard(message.from_user.id)
     )
@@ -435,94 +533,301 @@ async def buy_twenty_spreads(message: Message):
 
 @dp.message(F.text == "🌟 Общий расклад")
 async def three_cards_start(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
     await save_user(message.from_user)
+
+    await state.clear()
+    await state.set_state(SpreadStates.waiting_three_card_preview)
+
+    sent = await message.answer(
+        "🌟 <b>Общий расклад</b>\n\n"
+        "Подходит, если хочется посмотреть на ситуацию шире.\n\n"
+        "В расклад входят:\n"
+        "• текущая энергия ситуации\n"
+        "• скрытые факторы\n"
+        "• возможное развитие\n"
+        "• совет карт\n\n"
+        "После подтверждения я попрошу вас написать вопрос.\n"
+        "Чем конкретнее вопрос, тем точнее получится расклад.\n\n"
+        "Примеры вопросов:\n"
+        "• Что мне важно понять в этой ситуации?\n"
+        "• Почему всё развивается именно так?\n"
+        "• Какой следующий шаг будет самым разумным?",
+        parse_mode="HTML",
+        reply_markup=service_preview_keyboard
+    )
+    await remember_flow_message(state, sent)
+
+
+@dp.message(SpreadStates.waiting_three_card_preview, F.text == "✨ Получить расклад")
+async def three_card_preview_get(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await ask_product_confirm(
+        message,
+        state,
+        SpreadStates.waiting_three_card_confirm,
+        "🌟 <b>Общий расклад</b>"
+    )
+
+
+@dp.message(SpreadStates.waiting_three_card_preview, F.text == "⬅️ Назад")
+async def three_card_preview_back(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.clear()
+    await message.answer("Главное меню", reply_markup=get_main_keyboard(message.from_user.id))
+
+
+@dp.message(SpreadStates.waiting_three_card_confirm, F.text == "⬅️ Отмена")
+async def three_card_confirm_cancel(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.clear()
+    await message.answer("Главное меню", reply_markup=get_main_keyboard(message.from_user.id))
+
+
+@dp.message(SpreadStates.waiting_three_card_confirm, F.text == "✅ Да")
+async def three_card_confirm_yes(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
     await state.set_state(SpreadStates.waiting_three_card_question)
 
-    await message.answer(
-        "🌟 Напиши свой вопрос для общего расклада.\n\n"
+    sent = await message.answer(
+        "🌟 <b>Общий расклад</b>\n\n"
+        "Напишите свой вопрос для расклада.\n\n"
         "Например:\n"
         "• Что мне важно понять сейчас?\n"
         "• Почему ситуация развивается так?\n"
-        "• На что обратить внимание?"
+        "• На что обратить внимание?",
+        parse_mode="HTML"
     )
+    await remember_flow_message(state, sent)
 
 
 @dp.message(F.text == "❤️ Отношения")
 async def relationships(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
     await save_user(message.from_user)
+
+    await state.clear()
+    await state.set_state(SpreadStates.waiting_relationship_preview)
+
+    sent = await message.answer(
+        "❤️ <b>Отношения</b>\n\n"
+        "Расклад помогает мягко посмотреть на чувства, динамику пары и перспективы общения.\n\n"
+        "В расклад входят:\n"
+        "• что происходит между вами сейчас\n"
+        "• чувства и скрытые мотивы\n"
+        "• возможные напряжения\n"
+        "• перспектива развития\n"
+        "• совет карт\n\n"
+        "После подтверждения я попрошу вас написать вопрос.\n"
+        "Чем конкретнее вопрос, тем точнее получится расклад.\n\n"
+        "Примеры вопросов:\n"
+        "• Что происходит между нами?\n"
+        "• Что он/она чувствует?\n"
+        "• Есть ли перспектива у этих отношений?",
+        parse_mode="HTML",
+        reply_markup=service_preview_keyboard
+    )
+    await remember_flow_message(state, sent)
+
+
+@dp.message(SpreadStates.waiting_relationship_preview, F.text == "✨ Получить расклад")
+async def relationship_preview_get(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await ask_product_confirm(
+        message,
+        state,
+        SpreadStates.waiting_relationship_confirm,
+        "❤️ <b>Отношения</b>"
+    )
+
+
+@dp.message(SpreadStates.waiting_relationship_preview, F.text == "⬅️ Назад")
+async def relationship_preview_back(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.clear()
+    await message.answer("Главное меню", reply_markup=get_main_keyboard(message.from_user.id))
+
+
+@dp.message(SpreadStates.waiting_relationship_confirm, F.text == "⬅️ Отмена")
+async def relationship_confirm_cancel(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.clear()
+    await message.answer("Главное меню", reply_markup=get_main_keyboard(message.from_user.id))
+
+
+@dp.message(SpreadStates.waiting_relationship_confirm, F.text == "✅ Да")
+async def relationship_confirm_yes(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
     await state.set_state(SpreadStates.waiting_relationship_question)
 
-    await message.answer(
-        "❤️ Напиши вопрос для расклада на отношения.\n\n"
+    sent = await message.answer(
+        "❤️ <b>Отношения</b>\n\n"
+        "Напишите вопрос для расклада на отношения.\n\n"
         "Например:\n"
         "• Что происходит между нами?\n"
         "• Что он/она чувствует?\n"
-        "• Есть ли перспектива у этих отношений?"
+        "• Есть ли перспектива у этих отношений?",
+        parse_mode="HTML"
     )
+    await remember_flow_message(state, sent)
 
 
 @dp.message(F.text == "💼 Карьера")
 async def career(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
     await save_user(message.from_user)
+
+    await state.clear()
+    await state.set_state(SpreadStates.waiting_career_preview)
+
+    sent = await message.answer(
+        "💼 <b>Карьера</b>\n\n"
+        "Расклад помогает посмотреть на работу, развитие, выбор направления и профессиональные решения.\n\n"
+        "В расклад входят:\n"
+        "• текущая энергия в работе\n"
+        "• что помогает или мешает росту\n"
+        "• скрытые факторы\n"
+        "• возможное развитие ситуации\n"
+        "• совет карт\n\n"
+        "После подтверждения я попрошу вас написать вопрос.\n"
+        "Чем конкретнее вопрос, тем точнее получится расклад.\n\n"
+        "Примеры вопросов:\n"
+        "• Стоит ли менять работу?\n"
+        "• Что мешает карьерному росту?\n"
+        "• На что обратить внимание в работе?",
+        parse_mode="HTML",
+        reply_markup=service_preview_keyboard
+    )
+    await remember_flow_message(state, sent)
+
+
+@dp.message(SpreadStates.waiting_career_preview, F.text == "✨ Получить расклад")
+async def career_preview_get(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await ask_product_confirm(
+        message,
+        state,
+        SpreadStates.waiting_career_confirm,
+        "💼 <b>Карьера</b>"
+    )
+
+
+@dp.message(SpreadStates.waiting_career_preview, F.text == "⬅️ Назад")
+async def career_preview_back(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.clear()
+    await message.answer("Главное меню", reply_markup=get_main_keyboard(message.from_user.id))
+
+
+@dp.message(SpreadStates.waiting_career_confirm, F.text == "⬅️ Отмена")
+async def career_confirm_cancel(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.clear()
+    await message.answer("Главное меню", reply_markup=get_main_keyboard(message.from_user.id))
+
+
+@dp.message(SpreadStates.waiting_career_confirm, F.text == "✅ Да")
+async def career_confirm_yes(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
     await state.set_state(SpreadStates.waiting_career_question)
 
-    await message.answer(
-        "💼 Напиши вопрос для карьерного расклада.\n\n"
+    sent = await message.answer(
+        "💼 <b>Карьера</b>\n\n"
+        "Напишите вопрос для карьерного расклада.\n\n"
         "Например:\n"
         "• Стоит ли менять работу?\n"
         "• Что мешает карьерному росту?\n"
-        "• На что обратить внимание в работе?"
+        "• На что обратить внимание в работе?",
+        parse_mode="HTML"
     )
+    await remember_flow_message(state, sent)
 
 
 @dp.message(F.text == "💰 Деньги")
 async def money(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
     await save_user(message.from_user)
-    await state.set_state(SpreadStates.waiting_money_question)
 
-    await message.answer(
-        "💰 Напиши вопрос для денежного расклада.\n\n"
-        "Например:\n"
+    await state.clear()
+    await state.set_state(SpreadStates.waiting_money_preview)
+
+    sent = await message.answer(
+        "💰 <b>Деньги</b>\n\n"
+        "Расклад помогает посмотреть на финансовую ситуацию, денежные решения и внутренние ограничения.\n\n"
+        "В расклад входят:\n"
+        "• текущая энергия денег\n"
+        "• что помогает финансовому росту\n"
+        "• что может мешать\n"
+        "• возможное развитие ситуации\n"
+        "• совет карт\n\n"
+        "После подтверждения я попрошу вас написать вопрос.\n"
+        "Чем конкретнее вопрос, тем точнее получится расклад.\n\n"
+        "Примеры вопросов:\n"
         "• Что мне важно понять про деньги сейчас?\n"
         "• Что мешает финансовому росту?\n"
-        "• На что обратить внимание в расходах?"
+        "• На что обратить внимание в расходах?",
+        parse_mode="HTML",
+        reply_markup=service_preview_keyboard
+    )
+    await remember_flow_message(state, sent)
+
+
+@dp.message(SpreadStates.waiting_money_preview, F.text == "✨ Получить расклад")
+async def money_preview_get(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await ask_product_confirm(
+        message,
+        state,
+        SpreadStates.waiting_money_confirm,
+        "💰 <b>Деньги</b>"
     )
 
 
-@dp.message(F.text == "📜 История")
-async def history(message: Message):
-    await save_user(message.from_user)
+@dp.message(SpreadStates.waiting_money_preview, F.text == "⬅️ Назад")
+async def money_preview_back(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.clear()
+    await message.answer("Главное меню", reply_markup=get_main_keyboard(message.from_user.id))
 
-    spreads = await get_user_spreads(message.from_user.id, limit=5)
 
-    if not spreads:
-        await message.answer(
-            "📜 История пока пустая.\n\n"
-            "Сделай расклад, и он появится здесь."
-        )
-        return
+@dp.message(SpreadStates.waiting_money_confirm, F.text == "⬅️ Отмена")
+async def money_confirm_cancel(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.clear()
+    await message.answer("Главное меню", reply_markup=get_main_keyboard(message.from_user.id))
 
-    text = "📜 История раскладов\n\n"
 
-    emoji_map = {
-        "Общий расклад": "🔮",
-        "Отношения": "❤️",
-        "Карьера": "🎯",
-        "Деньги": "💰",
-        "Расклад 3 карты": "🃏",
-        "Личная матрица": "✨",
-    }
+@dp.message(SpreadStates.waiting_money_confirm, F.text == "✅ Да")
+async def money_confirm_yes(message: Message, state: FSMContext):
+    await safe_delete_current_message(message)
+    await cleanup_flow_messages(message, state)
+    await state.set_state(SpreadStates.waiting_money_question)
 
-    for idx, spread in enumerate(spreads, start=1):
-        spread_type = spread['spread_type']
-        emoji = emoji_map.get(spread_type, "🔮")
-
-        text += (
-            f"{idx}. {emoji} {spread_type}\n"
-            f"❓ {spread['question']}\n\n"
-        )
-
-    await message.answer(text)
+    sent = await message.answer(
+        "💰 <b>Деньги</b>\n\n"
+        "Напишите вопрос для денежного расклада.\n\n"
+        "Например:\n"
+        "• Что мне важно понять про деньги сейчас?\n"
+        "• Что мешает финансовому росту?\n"
+        "• На что обратить внимание в расходах?",
+        parse_mode="HTML"
+    )
+    await remember_flow_message(state, sent)
 
 
 @dp.message(F.text == "ℹ️ О боте")
@@ -538,7 +843,7 @@ async def about(message: Message):
         "💼 Карьера\n"
         "💰 Деньги\n\n"
         "🎁 Карта дня доступна бесплатно каждый день.\n"
-        "Для остальных разделов используются разборы с баланса.\n\n"
+        "Для остальных разделов используются кредиты.\n\n"
         "Бот предназначен для самоанализа, рефлексии и развлекательных интерпретаций. Он не предсказывает будущее наверняка и не заменяет профессиональные консультации."
     )
 
@@ -888,47 +1193,64 @@ async def cancel_broadcast(message: Message, state: FSMContext):
     await message.answer("❌ Рассылка отменена.", reply_markup=admin_keyboard)
 
 
-async def process_spread(message: Message, spread_type, intro_text, interpret_func):
-    user_id = message.from_user.id
-
-    if not await user_has_spread_access(user_id):
-        await no_access_message(message)
+async def process_spread(message: Message, state: FSMContext, spread_type, intro_text, interpret_func):
+    if not await acquire_heavy_request(message):
         return
 
-    question = message.text
-    cards = draw_three_cards()
+    try:
+        await safe_delete_current_message(message)
+        user_id = message.from_user.id
 
-    await message.answer(intro_text)
+        if not await user_has_spread_access(user_id):
+            await cleanup_flow_messages(message, state)
+            await state.clear()
+            await no_access_message(message)
+            return
 
-    for index, card in enumerate(cards, start=1):
-        photo = FSInputFile(f"/opt/bots/tarot_bot/data/cards/{card['image']}")
+        question = message.text
+        await cleanup_flow_messages(message, state)
 
-        await message.answer_photo(
-            photo=photo,
-            caption=f"{index}. {card['name']} ({card['orientation']})"
+        cards = draw_three_cards()
+
+        sent = await message.answer(intro_text)
+        await remember_flow_message(state, sent)
+
+        for index, card in enumerate(cards, start=1):
+            photo = FSInputFile(f"/opt/bots/tarot_bot/data/cards/{card['image']}")
+
+            await message.answer_photo(
+                photo=photo,
+                caption=f"{index}. {card['name']} ({card['orientation']})"
+            )
+
+        sent = await message.answer("✨ Интерпретирую расклад...")
+        await remember_flow_message(state, sent)
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+        interpretation = await interpret_func(question, cards)
+
+        await save_spread(
+            user_id=user_id,
+            spread_type=spread_type,
+            question=question,
+            cards=cards,
+            answer=interpretation
         )
 
-    await message.answer("✨ Интерпретирую расклад...")
-    await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        await charge_user_for_spread(user_id)
+        await cleanup_flow_messages(message, state)
 
-    interpretation = await interpret_func(question, cards)
+        await message.answer(
+            f"🔮 <b>{spread_type}</b>\n\n"
+            f"<b>Вопрос:</b>\n{question}\n\n"
+            f"{markdown_bold_to_html(interpretation)}",
+            parse_mode="HTML",
+            reply_markup=get_main_keyboard(message.from_user.id)
+        )
 
-    await save_spread(
-        user_id=user_id,
-        spread_type=spread_type,
-        question=question,
-        cards=cards,
-        answer=interpretation
-    )
-
-    await charge_user_for_spread(user_id)
-
-    await message.answer(
-        f"🔮 {spread_type}\n\n"
-        f"Вопрос:\n{question}\n\n"
-        f"{markdown_bold_to_html(interpretation)}",
-        parse_mode="HTML"
-    )
+        await state.clear()
+    finally:
+        release_heavy_request(message.from_user.id)
 
 
 
@@ -1020,44 +1342,44 @@ async def admin_balance_writeoff_process(message: Message, state: FSMContext):
 async def process_money_question(message: Message, state: FSMContext):
     await process_spread(
         message,
+        state,
         "Деньги",
         "💰 Вытягиваю карты для денежного расклада...",
         interpret_money_spread
     )
-    await state.clear()
 
 
 @dp.message(SpreadStates.waiting_career_question)
 async def process_career_question(message: Message, state: FSMContext):
     await process_spread(
         message,
+        state,
         "Карьера",
         "💼 Вытягиваю карты для карьерного расклада...",
         interpret_career_spread
     )
-    await state.clear()
 
 
 @dp.message(SpreadStates.waiting_relationship_question)
 async def process_relationship_question(message: Message, state: FSMContext):
     await process_spread(
         message,
+        state,
         "Отношения",
         "❤️ Вытягиваю карты для расклада на отношения...",
         interpret_relationship_spread
     )
-    await state.clear()
 
 
 @dp.message(SpreadStates.waiting_three_card_question)
 async def process_three_card_question(message: Message, state: FSMContext):
     await process_spread(
         message,
+        state,
         "Общий расклад",
         "🃏 Вытягиваю три карты...",
         interpret_three_cards
     )
-    await state.clear()
 
 
 
